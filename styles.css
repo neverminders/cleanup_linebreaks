@@ -1,0 +1,90 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.app {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+h1 {
+  margin-bottom: 0.35rem;
+}
+
+.subtitle {
+  margin-top: 0;
+  color: #cbd5e1;
+}
+
+.drop-zone {
+  border: 2px dashed #64748b;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.75);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.drop-zone.drag-over {
+  border-color: #38bdf8;
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.button,
+button {
+  display: inline-block;
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #38bdf8;
+  color: #082f49;
+}
+
+.button:hover,
+button:hover:enabled {
+  background: #7dd3fc;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+input[type='file'] {
+  position: absolute;
+  left: -9999px;
+}
+
+.options,
+.actions,
+.status {
+  margin-top: 1.25rem;
+}
+
+.hint {
+  margin: 0.35rem 0;
+  opacity: 0.8;
+}
+
+#details {
+  margin: 0.65rem 0 0;
+  padding-left: 1rem;
+  line-height: 1.45;
+}
+
+code {
+  background: rgba(148, 163, 184, 0.2);
+  padding: 0.08rem 0.35rem;
+  border-radius: 0.35rem;
+}

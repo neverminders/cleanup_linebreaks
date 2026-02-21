@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clean-up Line Breaks</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Clean-up Line Breaks</h1>
+      <p class="subtitle">
+        Încarcă foldere/subfoldere cu fișiere CSV/TSV, normalizează line breaks în <code>\r</code>
+        și descarcă doar fișierele modificate.
+      </p>
+
+      <section id="drop-zone" class="drop-zone" aria-label="Zona de drag and drop">
+        <p>Trage aici foldere sau fișiere</p>
+        <p class="hint">sau</p>
+        <label class="button" for="file-input">Alege fișiere/foldere</label>
+        <input id="file-input" type="file" webkitdirectory multiple />
+      </section>
+
+      <section class="options">
+        <label>
+          <input id="include-markers" type="checkbox" />
+          Include și markerele <code> || </code> în înlocuire
+        </label>
+      </section>
+
+      <section class="actions">
+        <button id="process-btn" disabled>Procesează &amp; descarcă fișierele modificate</button>
+      </section>
+
+      <section class="status">
+        <h2>Status</h2>
+        <p id="summary">Niciun fișier încărcat.</p>
+        <ul id="details"></ul>
+      </section>
+    </main>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
