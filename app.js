@@ -16,6 +16,10 @@ function isCsvOrTsv(name) {
   return Boolean(extension && ACCEPTED_EXTENSIONS.has(extension));
 }
 
+function inferDelimiter(name) {
+  return name.toLowerCase().endsWith('.tsv') ? '\t' : ',';
+}
+
 function nextVersionedName(name) {
   const dotIndex = name.lastIndexOf('.');
   const base = dotIndex >= 0 ? name.slice(0, dotIndex) : name;
@@ -121,14 +125,114 @@ function encodeText(text, encodingInfo) {
 
 function normalizeLineBreaks(content, includeMarkers) {
   let normalized = content
-    .replace(XLSX_ESCAPED_BREAKS_PATTERN, '\n')
-    .replace(LINE_BREAK_PATTERN, '\n');
+    .replace(XLSX_ESCAPED_BREAKS_PATTERN, '\r')
+    .replace(LINE_BREAK_PATTERN, '\r');
 
   if (includeMarkers) {
-    normalized = normalized.replace(/\s\|\|\s/g, '\n');
+    normalized = normalized.replace(/\s\|\|\s/g, '\r');
   }
 
   return normalized;
+}
+
+function parseDelimited(text, delimiter) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  let recordSeparator = null;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+
+    if (char === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        field += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && char === delimiter) {
+      row.push(field);
+      field = '';
+      continue;
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (!recordSeparator) {
+        recordSeparator = char === '\r' && text[i + 1] === '\n' ? '\r\n' : char;
+      }
+
+      if (char === '\r' && text[i + 1] === '\n') {
+        i += 1;
+      }
+
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field);
+  rows.push(row);
+
+  return {
+    rows,
+    recordSeparator: recordSeparator || '\n',
+  };
+}
+
+function serializeDelimited(rows, delimiter, recordSeparator) {
+  const serializedRows = rows.map((row) =>
+    row
+      .map((field) => {
+        const safeField = field ?? '';
+        const mustQuote =
+          safeField.includes(delimiter) ||
+          safeField.includes('"') ||
+          safeField.includes('\n') ||
+          safeField.includes('\r');
+
+        if (!mustQuote) {
+          return safeField;
+        }
+
+        return `"${safeField.replace(/"/g, '""')}"`;
+      })
+      .join(delimiter),
+  );
+
+  return serializedRows.join(recordSeparator);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function downloadModifiedFiles(modifiedFiles) {
+  for (const file of modifiedFiles) {
+    const blob = new Blob([file.contentBytes], { type: file.type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+
+    await wait(120);
+
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function updateSelectionSummary() {
@@ -219,29 +323,6 @@ async function handleDrop(event) {
   addFiles(event.dataTransfer?.files || []);
 }
 
-function wait(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-async function downloadModifiedFiles(modifiedFiles) {
-  for (const file of modifiedFiles) {
-    const blob = new Blob([file.contentBytes], { type: file.type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-
-    await wait(120);
-
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-}
-
 async function processFiles() {
   const includeMarkers = includeMarkersCheckbox.checked;
   const modified = [];
@@ -250,19 +331,32 @@ async function processFiles() {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const encodingInfo = detectTextEncoding(bytes);
     const text = decodeText(bytes, encodingInfo);
-    const cleaned = normalizeLineBreaks(text, includeMarkers);
+    const delimiter = inferDelimiter(relativePath);
+    const parsed = parseDelimited(text, delimiter);
 
-    if (cleaned === text) {
+    let hasChanges = false;
+    const normalizedRows = parsed.rows.map((row) =>
+      row.map((field) => {
+        const normalizedField = normalizeLineBreaks(field, includeMarkers);
+        if (normalizedField !== field) {
+          hasChanges = true;
+        }
+        return normalizedField;
+      }),
+    );
+
+    if (!hasChanges) {
       continue;
     }
 
+    const serialized = serializeDelimited(normalizedRows, delimiter, parsed.recordSeparator);
     const originalName = relativePath.split('/').pop() || file.name;
     const versionedName = nextVersionedName(originalName);
 
     modified.push({
       path: relativePath,
       name: versionedName,
-      contentBytes: encodeText(cleaned, encodingInfo),
+      contentBytes: encodeText(serialized, encodingInfo),
       type: file.type || 'text/plain;charset=utf-8',
     });
   }
