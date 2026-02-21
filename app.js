@@ -121,11 +121,11 @@ function encodeText(text, encodingInfo) {
 
 function normalizeLineBreaks(content, includeMarkers) {
   let normalized = content
-    .replace(XLSX_ESCAPED_BREAKS_PATTERN, '\r')
-    .replace(LINE_BREAK_PATTERN, '\r');
+    .replace(XLSX_ESCAPED_BREAKS_PATTERN, '\n')
+    .replace(LINE_BREAK_PATTERN, '\n');
 
   if (includeMarkers) {
-    normalized = normalized.replace(/\s\|\|\s/g, '\r');
+    normalized = normalized.replace(/\s\|\|\s/g, '\n');
   }
 
   return normalized;
