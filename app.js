@@ -30,6 +30,95 @@ function nextVersionedName(name) {
   return `${versionMatch[1]}-v${nextVersion}${extension}`;
 }
 
+function detectTextEncoding(bytes) {
+  if (bytes.length >= 2) {
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return { encoding: 'utf-16le', bom: new Uint8Array([0xff, 0xfe]) };
+    }
+
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+      return { encoding: 'utf-16be', bom: new Uint8Array([0xfe, 0xff]) };
+    }
+  }
+
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return { encoding: 'utf-8', bom: new Uint8Array([0xef, 0xbb, 0xbf]) };
+  }
+
+  let evenNulls = 0;
+  let oddNulls = 0;
+  const limit = Math.min(bytes.length, 4096);
+  for (let i = 0; i < limit; i += 1) {
+    if (bytes[i] !== 0x00) {
+      continue;
+    }
+
+    if (i % 2 === 0) {
+      evenNulls += 1;
+    } else {
+      oddNulls += 1;
+    }
+  }
+
+  if (oddNulls > evenNulls * 2 && oddNulls > 8) {
+    return { encoding: 'utf-16le', bom: null };
+  }
+
+  if (evenNulls > oddNulls * 2 && evenNulls > 8) {
+    return { encoding: 'utf-16be', bom: null };
+  }
+
+  return { encoding: 'utf-8', bom: null };
+}
+
+function decodeText(bytes, encodingInfo) {
+  const offset = encodingInfo.bom?.length || 0;
+  const payload = bytes.slice(offset);
+  const decoder = new TextDecoder(encodingInfo.encoding);
+  return decoder.decode(payload);
+}
+
+function encodeUtf16(text, littleEndian) {
+  const out = new Uint8Array(text.length * 2);
+
+  for (let i = 0; i < text.length; i += 1) {
+    const codeUnit = text.charCodeAt(i);
+    const low = codeUnit & 0xff;
+    const high = (codeUnit >>> 8) & 0xff;
+    const index = i * 2;
+
+    if (littleEndian) {
+      out[index] = low;
+      out[index + 1] = high;
+    } else {
+      out[index] = high;
+      out[index + 1] = low;
+    }
+  }
+
+  return out;
+}
+
+function encodeText(text, encodingInfo) {
+  let encoded;
+  if (encodingInfo.encoding === 'utf-16le') {
+    encoded = encodeUtf16(text, true);
+  } else if (encodingInfo.encoding === 'utf-16be') {
+    encoded = encodeUtf16(text, false);
+  } else {
+    encoded = new TextEncoder().encode(text);
+  }
+
+  if (!encodingInfo.bom) {
+    return encoded;
+  }
+
+  const merged = new Uint8Array(encodingInfo.bom.length + encoded.length);
+  merged.set(encodingInfo.bom, 0);
+  merged.set(encoded, encodingInfo.bom.length);
+  return merged;
+}
+
 function normalizeLineBreaks(content, includeMarkers) {
   let normalized = content
     .replace(XLSX_ESCAPED_BREAKS_PATTERN, '\r')
@@ -135,7 +224,9 @@ async function processFiles() {
   const modified = [];
 
   for (const [relativePath, file] of selectedFiles.entries()) {
-    const text = await file.text();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const encodingInfo = detectTextEncoding(bytes);
+    const text = decodeText(bytes, encodingInfo);
     const cleaned = normalizeLineBreaks(text, includeMarkers);
 
     if (cleaned === text) {
@@ -148,7 +239,7 @@ async function processFiles() {
     modified.push({
       path: relativePath,
       name: versionedName,
-      content: cleaned,
+      contentBytes: encodeText(cleaned, encodingInfo),
       type: file.type || 'text/plain;charset=utf-8',
     });
   }
@@ -159,7 +250,7 @@ async function processFiles() {
   }
 
   for (const file of modified) {
-    const blob = new Blob([file.content], { type: file.type });
+    const blob = new Blob([file.contentBytes], { type: file.type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
