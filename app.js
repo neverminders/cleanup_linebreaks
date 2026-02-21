@@ -219,6 +219,29 @@ async function handleDrop(event) {
   addFiles(event.dataTransfer?.files || []);
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function downloadModifiedFiles(modifiedFiles) {
+  for (const file of modifiedFiles) {
+    const blob = new Blob([file.contentBytes], { type: file.type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+
+    await wait(120);
+
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
 async function processFiles() {
   const includeMarkers = includeMarkersCheckbox.checked;
   const modified = [];
@@ -249,17 +272,7 @@ async function processFiles() {
     return;
   }
 
-  for (const file of modified) {
-    const blob = new Blob([file.contentBytes], { type: file.type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
+  await downloadModifiedFiles(modified);
 
   summary.textContent = `${modified.length} fișier(e) modificate descărcate.`;
   details.innerHTML = '';
